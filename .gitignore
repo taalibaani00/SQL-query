@@ -71,6 +71,8 @@ tmp/
 
 logs_files/
 log_files/
+sql_queries/
+csv_files/
 
 analysis_output/
 reports/

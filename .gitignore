@@ -103,6 +103,11 @@ com.battles99.rummyandroid-latest*.log
 !com.battles99.rummyandroid-latest\ 2.log
 !com.battles99.rummyandroid-latest\ 3.log
 
+# Log files directories
+logs_files/
+log_files/
+extracted_logs/
+
 # ===============================================
 # ANALYSIS OUTPUT FILES
 # ===============================================
@@ -138,4 +143,15 @@ s3_downloads/
 
 # Test files (except samples)
 test_*.csv
-!sample_*.csv 
+!sample_*.csv
+
+# ===============================================
+# CSV DATA FILES
+# ===============================================
+*.csv
+!sample_*.csv
+!consolidated_*.csv
+
+# CSV data directories
+csv_files/
+data_files/ 

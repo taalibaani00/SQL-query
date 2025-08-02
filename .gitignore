@@ -74,6 +74,7 @@ log_files/
 sql_queries/
 csv_files/
 
+
 analysis_output/
 reports/
 downloads/
@@ -83,7 +84,6 @@ extracted_logs/
 *.sqlite
 *.sqlite3
 
-# =========================================
 *.zip
 *.tar.gz
 *.rar
@@ -97,7 +97,7 @@ s3_downloads/
 test_*.csv
 !sample_*.csv
 
-
+*.png
 *.csv
 *.sql
 !sample_*.csv
@@ -105,3 +105,5 @@ test_*.csv
 
 csv_files/
 data_files/ 
+
+test.mmd

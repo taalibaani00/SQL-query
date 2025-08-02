@@ -97,6 +97,7 @@ test_*.csv
 
 
 *.csv
+*.sql
 !sample_*.csv
 !consolidated_*.csv
 

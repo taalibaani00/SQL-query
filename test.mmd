@@ -1,0 +1,27 @@
+graph TD
+    subgraph "Game Ends on Table_X"
+        A[Game Round on Table_X Finishes] --> B{Player wants to continue?};
+        B -- Yes --> C[Move Player to Continuing_Player_Pool];
+        B -- No --> D[Player leaves];
+        C --> E[Release Table_X to Inventory];
+        D --> E;
+    end
+
+    subgraph "Matchmaking Engine (Continuous Cycle)"
+        F[Start Cycle] --> G{"Is Continuing_Player_Pool<br>big enough for a game?"};
+        G -- Yes --> H[Create game from<br>Continuing Players];
+        G -- No --> I{"Are there ANY players in<br>Continuing_Player_Pool?"};
+        I -- Yes --> J{"Can we combine<br>Continuing + New Players?"};
+        J -- Yes --> K[Create game from<br>Mixed Pool];
+        I -- No --> L{"Is New_Player_Queue<br>big enough?"};
+        J -- No --> L;
+        L -- Yes --> M[Create game from<br>New Players];
+        L -- No --> N[Wait for more players...];
+        
+        H --> F;
+        K --> F;
+        M --> F;
+        N --> F;
+    end
+    
+    E -- "Triggers/Provides Resources for" --> F;

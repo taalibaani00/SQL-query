@@ -69,10 +69,11 @@ temp/
 tmp/
 
 
-logs_files/
-log_files/
-sql_queries/
-csv_files/
+# Directory names with proper spacing and capitalization  
+logs files/
+SQL queries/
+
+# Note: CSV files/ not ignored so that !sample_*.csv and !consolidated_*.csv exceptions work
 
 
 analysis_output/
@@ -103,7 +104,6 @@ test_*.csv
 !sample_*.csv
 !consolidated_*.csv
 
-csv_files/
 data_files/ 
 
 test.mmd

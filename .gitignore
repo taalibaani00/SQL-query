@@ -102,6 +102,3 @@ test_*.csv
 
 csv_files/
 data_files/ 
-
-logs\ files/
-SQL\ queries/

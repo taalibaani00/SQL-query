@@ -14,20 +14,43 @@ This script automates the complete process of analyzing matchmaking failures by:
 pip install -r requirements.txt
 ```
 
-### 2. Configure AWS Credentials
-You need AWS credentials configured. Choose one method:
+### 2. Configure AWS Credentials & Environment Variables
 
-**Option A: AWS CLI (Recommended)**
+#### **🔐 Option A: Environment File (Recommended)**
+Create a `.env` file to securely store your credentials:
+
+```bash
+# Copy the example file
+cp env_example.txt .env
+
+# Edit .env file with your actual credentials
+nano .env
+```
+
+Fill in your AWS credentials in the `.env` file:
+```bash
+AWS_ACCESS_KEY_ID=your_actual_access_key
+AWS_SECRET_ACCESS_KEY=your_actual_secret_key
+AWS_DEFAULT_REGION=ap-south-1
+AWS_S3_BUCKET=prod-rummy-shared-upload-m-bucket
+```
+
+#### **Option B: AWS CLI**
 ```bash
 aws configure
 ```
 
-**Option B: Environment Variables**
+#### **Option C: Direct Environment Variables**
 ```bash
 export AWS_ACCESS_KEY_ID=your_access_key
 export AWS_SECRET_ACCESS_KEY=your_secret_key
 export AWS_DEFAULT_REGION=ap-south-1
 ```
+
+#### **🛡️ Security Note**
+- The `.env` file is automatically ignored by Git (secure)
+- Never commit AWS credentials to version control
+- Use IAM roles when running on AWS infrastructure
 
 **Option C: IAM Role (if running on EC2)**
 - Attach appropriate IAM role with S3 read permissions
@@ -53,6 +76,36 @@ Your AWS credentials need the following permissions:
 }
 ```
 
+## ⚙️ Configuration Options
+
+### Environment Variables
+You can configure the analyzer using environment variables in your `.env` file:
+
+```bash
+# AWS Configuration
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_DEFAULT_REGION=ap-south-1
+AWS_S3_BUCKET=prod-rummy-shared-upload-m-bucket
+
+# Logging Configuration
+LOG_LEVEL=INFO                    # DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_FILE_PATH=matchmaking_analyzer.log
+VERBOSE_LOGGING=false
+
+# Analysis Configuration
+DEFAULT_OUTPUT_DIR=./analysis_output
+MAX_LOG_FILES_PER_REGISTRATION=5
+IST_OFFSET_HOURS=5
+IST_OFFSET_MINUTES=30
+```
+
+### Environment Variable Priority
+The script uses this priority order for configuration:
+1. **Command line arguments** (highest priority)
+2. **Environment variables** from `.env` file
+3. **Default values** (lowest priority)
+
 ## 📊 CSV File Format
 
 Your input CSV file must contain at least these columns:
@@ -71,9 +124,18 @@ registrationId,created_at,reason
 
 ## 🛠️ Usage
 
-### Basic Usage
+### Basic Usage (with .env file)
 ```bash
+# With properly configured .env file, minimal arguments needed
 python automated_matchmaking_analyzer.py --csv failures.csv
+```
+
+### Basic Usage (without .env file)
+```bash
+python automated_matchmaking_analyzer.py \
+    --csv failures.csv \
+    --bucket prod-rummy-shared-upload-m-bucket \
+    --region ap-south-1
 ```
 
 ### Advanced Usage with Custom Options
@@ -84,6 +146,17 @@ python automated_matchmaking_analyzer.py \
     --bucket prod-rummy-shared-upload-m-bucket \
     --region ap-south-1 \
     --verbose
+```
+
+### Using Environment Variables Only
+```bash
+# Set all configuration via environment variables
+export AWS_ACCESS_KEY_ID=your_key
+export AWS_SECRET_ACCESS_KEY=your_secret
+export DEFAULT_OUTPUT_DIR=./custom_output
+export VERBOSE_LOGGING=true
+
+python automated_matchmaking_analyzer.py --csv failures.csv
 ```
 
 ### Command Line Arguments

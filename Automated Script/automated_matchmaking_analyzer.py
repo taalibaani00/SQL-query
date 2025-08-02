@@ -30,13 +30,20 @@ from pathlib import Path
 import argparse
 from typing import List, Dict, Tuple, Optional
 import logging
+from dotenv import load_dotenv
 
-# Configure logging
+# Load environment variables from .env file
+load_dotenv()
+
+# Configure logging using environment variables
+log_level = getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper())
+log_file_path = os.getenv('LOG_FILE_PATH', 'matchmaking_analyzer.log')
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('matchmaking_analyzer.log'),
+        logging.FileHandler(log_file_path),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -47,27 +54,167 @@ class AWSMatchmakingAnalyzer:
     Automated analyzer for matchmaking failures using AWS S3 logs
     """
     
-    def __init__(self, bucket_name: str = "prod-rummy-shared-upload-m-bucket", 
-                 region: str = "ap-south-1"):
+    def __init__(self, bucket_name: str = None, region: str = None):
         """
         Initialize the analyzer with AWS S3 configuration
         
         Args:
-            bucket_name: S3 bucket name containing the logs
-            region: AWS region
+            bucket_name: S3 bucket name containing the logs (defaults to env var AWS_S3_BUCKET)
+            region: AWS region (defaults to env var AWS_DEFAULT_REGION)
         """
-        self.bucket_name = bucket_name
-        self.region = region
+        # Use environment variables with fallback to defaults
+        self.bucket_name = bucket_name or os.getenv('AWS_S3_BUCKET', 'prod-rummy-shared-upload-m-bucket')
+        self.region = region or os.getenv('AWS_DEFAULT_REGION', 'ap-south-1')
         self.s3_client = None
         self.analysis_results = []
         
-        # Initialize S3 client
+        # Load configuration secrets from environment
+        self.config = self._load_configuration_secrets()
+        
+        # Get AWS credentials from environment variables (secrets)
+        aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        aws_session_token = os.getenv('AWS_SESSION_TOKEN')  # For temporary credentials
+        aws_endpoint_url = os.getenv('AWS_ENDPOINT_URL')  # Custom S3 endpoint if needed
+        
+        # Initialize S3 client with secrets from environment
         try:
-            self.s3_client = boto3.client('s3', region_name=region)
-            logger.info(f"✅ Connected to AWS S3 - Region: {region}, Bucket: {bucket_name}")
+            # Create boto3 session with credentials from environment
+            session_kwargs = {'region_name': self.region}
+            client_kwargs = {'region_name': self.region}
+            
+            # Add custom endpoint URL if provided (for S3-compatible services)
+            if aws_endpoint_url:
+                client_kwargs['endpoint_url'] = aws_endpoint_url
+                logger.info(f"🔧 Using custom S3 endpoint: {aws_endpoint_url}")
+            
+            if aws_access_key and aws_secret_key:
+                # Use explicit credentials from secrets
+                session_kwargs.update({
+                    'aws_access_key_id': aws_access_key,
+                    'aws_secret_access_key': aws_secret_key
+                })
+                if aws_session_token:
+                    session_kwargs['aws_session_token'] = aws_session_token
+                    logger.info("🔐 Using temporary AWS credentials (with session token)")
+                else:
+                    logger.info("🔐 Using permanent AWS credentials from environment secrets")
+                    
+                session = boto3.Session(**session_kwargs)
+                self.s3_client = session.client('s3', **client_kwargs)
+            else:
+                # Fallback to default credential chain (AWS CLI, IAM roles, etc.)
+                self.s3_client = boto3.client('s3', **client_kwargs)
+                logger.info("🔄 Using default AWS credential chain (no secrets provided)")
+                
+            logger.info(f"🌐 AWS Configuration - Region: {self.region}, Bucket: {self.bucket_name}")
+            
         except Exception as e:
             logger.error(f"❌ Failed to connect to AWS S3: {e}")
+            logger.error("💡 Make sure your AWS credentials are configured via:")
+            logger.error("   - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)")
+            logger.error("   - AWS CLI (aws configure)")
+            logger.error("   - IAM roles (if running on EC2)")
+            logger.error("   - .env file with AWS credentials")
             raise
+    
+    def _load_configuration_secrets(self) -> Dict:
+        """
+        Load all configuration secrets from environment variables
+        
+        Returns:
+            Dictionary containing all configuration values
+        """
+        config = {
+            # Analysis Configuration Secrets
+            'max_log_files_per_registration': int(os.getenv('MAX_LOG_FILES_PER_REGISTRATION', '5')),
+            'ist_offset_hours': int(os.getenv('IST_OFFSET_HOURS', '5')),
+            'ist_offset_minutes': int(os.getenv('IST_OFFSET_MINUTES', '30')),
+            'analysis_timeout_seconds': int(os.getenv('ANALYSIS_TIMEOUT_SECONDS', '300')),
+            
+            # Optional Configuration Secrets
+            'enable_debug_mode': os.getenv('ENABLE_DEBUG_MODE', 'false').lower() == 'true',
+            'max_parallel_downloads': int(os.getenv('MAX_PARALLEL_DOWNLOADS', '3')),
+            'cleanup_temp_files': os.getenv('CLEANUP_TEMP_FILES', 'true').lower() == 'true',
+            'enable_metrics_collection': os.getenv('ENABLE_METRICS_COLLECTION', 'false').lower() == 'true',
+            
+            # Database Secrets (for future use)
+            'database_url': os.getenv('DATABASE_URL', ''),
+            'database_password': os.getenv('DATABASE_PASSWORD', ''),
+            'api_key_internal': os.getenv('API_KEY_INTERNAL', ''),
+            'webhook_secret': os.getenv('WEBHOOK_SECRET', ''),
+            
+            # Notification Secrets (for future use)
+            'slack_webhook_url': os.getenv('SLACK_WEBHOOK_URL', ''),
+            'email_smtp_password': os.getenv('EMAIL_SMTP_PASSWORD', ''),
+            'alert_notification_token': os.getenv('ALERT_NOTIFICATION_TOKEN', '')
+        }
+        
+        # Log configuration (only non-sensitive parts)
+        logger.debug("🔧 Configuration loaded from environment secrets:")
+        logger.debug(f"   Max log files per registration: {config['max_log_files_per_registration']}")
+        logger.debug(f"   IST offset: +{config['ist_offset_hours']}:{config['ist_offset_minutes']:02d}")
+        logger.debug(f"   Analysis timeout: {config['analysis_timeout_seconds']}s")
+        logger.debug(f"   Debug mode: {config['enable_debug_mode']}")
+        logger.debug(f"   Cleanup temp files: {config['cleanup_temp_files']}")
+        
+        return config
+    
+    def _collect_metrics(self, event: str, data: Dict = None) -> None:
+        """
+        Collect metrics if enabled in configuration secrets
+        
+        Args:
+            event: Event name
+            data: Additional data to collect
+        """
+        if not self.config['enable_metrics_collection']:
+            return
+            
+        try:
+            import time
+            metrics_entry = {
+                'timestamp': time.time(),
+                'event': event,
+                'data': data or {}
+            }
+            
+            # For now, just log metrics - could be extended to send to monitoring service
+            logger.debug(f"📊 METRIC: {event} - {metrics_entry}")
+            
+            # Future: Send to monitoring service using secrets
+            # if self.config['api_key_internal']:
+            #     self._send_to_monitoring_service(metrics_entry)
+            
+        except Exception as e:
+            logger.debug(f"Failed to collect metrics: {e}")
+    
+    def _send_notification(self, message: str, level: str = 'info') -> None:
+        """
+        Send notification using configured secrets
+        
+        Args:
+            message: Notification message
+            level: Notification level (info, warning, error)
+        """
+        try:
+            # Slack notification using webhook secret
+            if self.config['slack_webhook_url']:
+                import requests
+                payload = {
+                    'text': f"🤖 Matchmaking Analyzer: {message}",
+                    'username': 'MatchmakingBot'
+                }
+                # Note: In production, implement proper Slack webhook notification
+                logger.debug(f"📢 Would send Slack notification: {message}")
+            
+            # Email notification using SMTP password
+            if self.config['email_smtp_password']:
+                # Note: In production, implement email notification
+                logger.debug(f"📧 Would send email notification: {message}")
+                
+        except Exception as e:
+            logger.debug(f"Failed to send notification: {e}")
     
     def gmt_to_ist(self, gmt_timestamp: str) -> datetime:
         """
@@ -99,8 +246,11 @@ class AWSMatchmakingAnalyzer:
             if gmt_dt is None:
                 raise ValueError(f"Unable to parse timestamp: {gmt_timestamp}")
             
-            # Add 5 hours 30 minutes for IST
-            ist_dt = gmt_dt + timedelta(hours=5, minutes=30)
+            # Add IST offset from configuration secrets
+            ist_dt = gmt_dt + timedelta(
+                hours=self.config['ist_offset_hours'], 
+                minutes=self.config['ist_offset_minutes']
+            )
             logger.debug(f"Converted {gmt_timestamp} (GMT) → {ist_dt} (IST)")
             return ist_dt
             
@@ -167,7 +317,12 @@ class AWSMatchmakingAnalyzer:
         
         logger.info(f"🔍 Searching for registration ID {registration_id} in {len(potential_files)} zip files")
         
-        # For now, return all zip files - we'll check content after download
+        # Limit the number of files based on configuration secrets
+        max_files = self.config['max_log_files_per_registration']
+        if len(potential_files) > max_files:
+            logger.info(f"⚠️ Limiting to {max_files} files (configured in MAX_LOG_FILES_PER_REGISTRATION)")
+            potential_files = potential_files[:max_files]
+        
         return potential_files
     
     def download_s3_file(self, s3_key: str, local_path: str) -> bool:
@@ -521,6 +676,12 @@ class AWSMatchmakingAnalyzer:
             output_dir: Output directory for analysis results
         """
         try:
+            # Collect metrics for CSV processing start
+            self._collect_metrics('csv_processing_started', {
+                'csv_file': csv_file_path,
+                'output_dir': output_dir
+            })
+            
             # Read CSV file
             df = pd.read_csv(csv_file_path)
             logger.info(f"📊 Loaded CSV file: {csv_file_path} with {len(df)} records")
@@ -599,8 +760,26 @@ class AWSMatchmakingAnalyzer:
                             if log_found:
                                 break
                             
-                            # Clean up zip file
-                            os.remove(local_zip_path)
+                            # Clean up zip file based on configuration secrets
+                            if self.config['cleanup_temp_files']:
+                                try:
+                                    os.remove(local_zip_path)
+                                    logger.debug(f"🧹 Cleaned up temporary file: {local_zip_path}")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Failed to cleanup {local_zip_path}: {e}")
+                            else:
+                                logger.debug(f"📁 Keeping temporary file: {local_zip_path} (cleanup disabled)")
+                    
+                    # Clean up extracted directories if configured
+                    if not log_found and self.config['cleanup_temp_files']:
+                        extract_dir = os.path.join(output_dir, f"{registration_id}_extracted")
+                        if os.path.exists(extract_dir):
+                            try:
+                                import shutil
+                                shutil.rmtree(extract_dir)
+                                logger.debug(f"🧹 Cleaned up extracted directory: {extract_dir}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Failed to cleanup {extract_dir}: {e}")
                     
                     if not log_found:
                         logger.warning(f"⚠️ Registration ID {registration_id} not found in any log files")
@@ -715,29 +894,102 @@ class AWSMatchmakingAnalyzer:
 
 def main():
     """Main function to run the automated analyzer"""
-    parser = argparse.ArgumentParser(description="Automated Matchmaking Failure Analyzer with AWS S3 Integration")
-    parser.add_argument("--csv", required=True, help="Path to CSV file containing matchmaking failures")
-    parser.add_argument("--output-dir", default="./analysis_output", help="Output directory for analysis results")
-    parser.add_argument("--bucket", default="prod-rummy-shared-upload-m-bucket", help="S3 bucket name")
-    parser.add_argument("--region", default="ap-south-1", help="AWS region")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
+    # Get default values from environment variables
+    default_output_dir = os.getenv('DEFAULT_OUTPUT_DIR', './analysis_output')
+    default_bucket = os.getenv('AWS_S3_BUCKET', 'prod-rummy-shared-upload-m-bucket')
+    default_region = os.getenv('AWS_DEFAULT_REGION', 'ap-south-1')
+    verbose_logging = os.getenv('VERBOSE_LOGGING', 'false').lower() == 'true'
+    
+    parser = argparse.ArgumentParser(
+        description="Automated Matchmaking Failure Analyzer with AWS S3 Integration",
+        epilog="""
+Environment Variables:
+  AWS_ACCESS_KEY_ID     AWS access key ID
+  AWS_SECRET_ACCESS_KEY AWS secret access key
+  AWS_DEFAULT_REGION    AWS region (default: ap-south-1)
+  AWS_S3_BUCKET         S3 bucket name
+  LOG_LEVEL            Logging level (DEBUG, INFO, WARNING, ERROR)
+  VERBOSE_LOGGING      Enable verbose logging (true/false)
+  
+Example:
+  python automated_matchmaking_analyzer.py --csv failures.csv
+  
+Note: Create a .env file (copy from env_example.txt) to store your AWS credentials securely.
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    parser.add_argument("--csv", required=True, 
+                       help="Path to CSV file containing matchmaking failures")
+    parser.add_argument("--output-dir", default=default_output_dir,
+                       help=f"Output directory for analysis results (default: {default_output_dir})")
+    parser.add_argument("--bucket", default=default_bucket,
+                       help=f"S3 bucket name (default: {default_bucket})")
+    parser.add_argument("--region", default=default_region,
+                       help=f"AWS region (default: {default_region})")
+    parser.add_argument("--verbose", "-v", action="store_true", default=verbose_logging,
+                       help="Enable verbose logging (can also set VERBOSE_LOGGING=true)")
     
     args = parser.parse_args()
     
-    if args.verbose:
+    # Override logging level if verbose is requested or debug mode is enabled in secrets
+    enable_debug = args.verbose or os.getenv('ENABLE_DEBUG_MODE', 'false').lower() == 'true'
+    if enable_debug:
         logging.getLogger().setLevel(logging.DEBUG)
+        if args.verbose:
+            logger.info("🔍 Verbose logging enabled via command line")
+        else:
+            logger.info("🔍 Debug mode enabled via ENABLE_DEBUG_MODE secret")
+    
+    # Log configuration information
+    logger.info("🚀 Starting Automated Matchmaking Analyzer")
+    logger.info(f"📄 CSV File: {args.csv}")
+    logger.info(f"📁 Output Directory: {args.output_dir}")
+    logger.info(f"🪣 S3 Bucket: {args.bucket}")
+    logger.info(f"🌐 AWS Region: {args.region}")
     
     try:
+        # Check if .env file exists and provide helpful message
+        if not os.path.exists('.env'):
+            logger.warning("⚠️ No .env file found!")
+            logger.warning("💡 For better security, create a .env file with your AWS credentials")
+            logger.warning("📝 Copy env_example.txt to .env and fill in your credentials")
+            logger.warning("🔄 Continuing with default AWS credential chain...")
+        else:
+            logger.info("✅ .env file found - using environment configuration")
+        
         # Initialize analyzer
         analyzer = AWSMatchmakingAnalyzer(bucket_name=args.bucket, region=args.region)
+        
+        # Collect startup metrics
+        analyzer._collect_metrics('analyzer_started', {
+            'csv_file': args.csv,
+            'output_dir': args.output_dir,
+            'bucket': args.bucket,
+            'region': args.region
+        })
         
         # Process CSV file
         analyzer.process_csv_file(args.csv, args.output_dir)
         
-        logger.info("🎉 Analysis completed successfully!")
+        # Collect completion metrics
+        analyzer._collect_metrics('analysis_completed', {
+            'total_results': len(analyzer.analysis_results)
+        })
         
+        # Send completion notification
+        analyzer._send_notification(f"Analysis completed successfully! Results saved to: {args.output_dir}")
+        
+        logger.info("🎉 Analysis completed successfully!")
+        logger.info(f"📊 Results saved to: {args.output_dir}")
+        
+    except FileNotFoundError as e:
+        logger.error(f"❌ File not found: {e}")
+        logger.error("💡 Make sure the CSV file path is correct")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Analysis failed: {e}")
+        logger.error("💡 Check your AWS credentials and network connection")
         sys.exit(1)
 
 if __name__ == "__main__":

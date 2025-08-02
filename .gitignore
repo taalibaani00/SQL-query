@@ -1,24 +1,15 @@
-# 🚫 Git Ignore File for Matchmaking Analyzer Project
 
-# ===============================================
-# CURSOR IDE SPECIFIC FILES
-# ===============================================
 .cursor-rules
 .cursor/
 *.cursor
 
-# ===============================================
-# PYTHON VIRTUAL ENVIRONMENTS
-# ===============================================
 .venv/
 venv/
 env/
 ENV/
 .env
 
-# ===============================================
-# PYTHON COMPILED FILES
-# ===============================================
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -42,55 +33,34 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# ===============================================
-# JUPYTER NOTEBOOK CHECKPOINTS
-# ===============================================
 .ipynb_checkpoints
 
-# ===============================================
-# ENVIRONMENT VARIABLES & SECRETS
-# ===============================================
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# AWS Credentials (if accidentally stored)
 .aws/
 *.pem
 *.key
 
-# ===============================================
-# IDE AND EDITOR FILES
-# ===============================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# ===============================================
-# OPERATING SYSTEM FILES
-# ===============================================
-# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 Icon
 
-# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Linux
-*~
-
-# ===============================================
-# LOG FILES AND TEMPORARY DATA
-# ===============================================
 *.log
 *.tmp
 *.temp
@@ -98,60 +68,40 @@ logs/
 temp/
 tmp/
 
-# Downloaded log files (keep sample ones)
-com.battles99.rummyandroid-latest*.log
-!com.battles99.rummyandroid-latest\ 2.log
-!com.battles99.rummyandroid-latest\ 3.log
 
-# Log files directories
 logs_files/
 log_files/
-extracted_logs/
 
-# ===============================================
-# ANALYSIS OUTPUT FILES
-# ===============================================
 analysis_output/
 reports/
 downloads/
 extracted_logs/
 
-# ===============================================
-# DATABASE FILES
-# ===============================================
 *.db
 *.sqlite
 *.sqlite3
 
-# ===============================================
-# COMPRESSED FILES
-# ===============================================
+# =========================================
 *.zip
 *.tar.gz
 *.rar
 
-# ===============================================
-# PROJECT SPECIFIC EXCLUSIONS
-# ===============================================
-# AWS downloaded files
 aws_logs/
 s3_downloads/
 
-# Analysis cache files
 .analysis_cache/
 .cache/
 
-# Test files (except samples)
 test_*.csv
 !sample_*.csv
 
-# ===============================================
-# CSV DATA FILES
-# ===============================================
+
 *.csv
 !sample_*.csv
 !consolidated_*.csv
 
-# CSV data directories
 csv_files/
 data_files/ 
+
+logs\ files/
+SQL\ queries/

@@ -217,15 +217,22 @@ def analyze_generic_matchmaking_patterns(file_path):
         pivot_table = pd.crosstab(analysis_df['game_type'], analysis_df['status'], margins=True)
         print(pivot_table)
         
-        analyze_2player_games(matchmaking_failed, analysis_df)
-        analyze_6player_games(matchmaking_failed, analysis_df)
+        timing_2p_result = analyze_2player_games(matchmaking_failed, analysis_df)
+        timing_6p_result = analyze_6player_games(matchmaking_failed, analysis_df)
         analyze_suspicious_games(matchmaking_failed, analysis_df)
         
         analyze_top_failing_users_generic(matchmaking_failed, analysis_df)
         
         generate_comparative_analysis(matchmaking_failed, analysis_df)
         
-        generate_executive_summary_generic(df, matchmaking_failed, analysis_df)
+        # Collect timing results for executive summary
+        timing_results = {}
+        if timing_2p_result:
+            timing_results['2-PLAYER'] = timing_2p_result
+        if timing_6p_result:
+            timing_results['6-PLAYER'] = timing_6p_result
+        
+        generate_executive_summary_generic(df, matchmaking_failed, analysis_df, timing_results)
         
         return analysis_df
         
@@ -239,6 +246,7 @@ def analyze_generic_matchmaking_patterns(file_path):
 def analyze_2player_games(matchmaking_failed, analysis_df):
     """
     Detailed analysis of 2-player games
+    Returns timing analysis result for executive summary
     """
     print(f"\n{'='*80}")
     print("🎯 2-PLAYER GAMES ANALYSIS")
@@ -262,10 +270,11 @@ def analyze_2player_games(matchmaking_failed, analysis_df):
     games_2p_details = matchmaking_failed[matchmaking_failed['game_id'].isin(games_2p_ids)]
     
     fishy_2p = games_2p[games_2p['status'] == 'FISHY']
+    timing_2p_result = None
     if len(fishy_2p) > 0:
         print(f"\n⏱️ TIMING ANALYSIS FOR 2P FISHY GAMES ({len(fishy_2p):,} games):")
         print("-" * 60)
-        analyze_timing_patterns(games_2p_details, fishy_2p['game_id'].tolist(), "2-PLAYER")
+        timing_2p_result = analyze_timing_patterns(games_2p_details, fishy_2p['game_id'].tolist(), "2-PLAYER")
     
     created_by_2p = games_2p_details['created_by'].value_counts()
     print(f"\n👤 CREATED_BY PATTERNS (2-Player Games):")
@@ -274,11 +283,14 @@ def analyze_2player_games(matchmaking_failed, analysis_df):
     for created_by, count in created_by_2p.items():
         percentage = (count / total_2p_records * 100)
         print(f"├── {created_by}: {count:,} ({percentage:.1f}%)")
+    
+    return timing_2p_result
 
 
 def analyze_6player_games(matchmaking_failed, analysis_df):
     """
     Detailed analysis of 6-player games (UPDATED: 3+ players can play)
+    Returns timing analysis result for executive summary
     """
     print(f"\n{'='*80}")
     print("🎲 6-PLAYER GAMES ANALYSIS (3+ players needed to play)")  
@@ -318,10 +330,11 @@ def analyze_6player_games(matchmaking_failed, analysis_df):
     
     # Timing analysis for 6P FISHY games
     fishy_6p = games_6p[games_6p['status'] == 'FISHY']
+    timing_6p_result = None
     if len(fishy_6p) > 0:
         print(f"\n⏱️ TIMING ANALYSIS FOR 6P FISHY GAMES ({len(fishy_6p):,} games):")
         print("-" * 60)
-        analyze_timing_patterns(games_6p_details, fishy_6p['game_id'].tolist(), "6-PLAYER")
+        timing_6p_result = analyze_timing_patterns(games_6p_details, fishy_6p['game_id'].tolist(), "6-PLAYER")
     
     created_by_6p = games_6p_details['created_by'].value_counts()
     print(f"\n👤 CREATED_BY PATTERNS (6-Player Games):")
@@ -330,6 +343,8 @@ def analyze_6player_games(matchmaking_failed, analysis_df):
     for created_by, count in created_by_6p.items():
         percentage = (count / total_6p_records * 100)
         print(f"├── {created_by}: {count:,} ({percentage:.1f}%)")
+    
+    return timing_6p_result
 
 
 def analyze_suspicious_games(matchmaking_failed, analysis_df):
@@ -389,12 +404,13 @@ def analyze_suspicious_games(matchmaking_failed, analysis_df):
 def analyze_timing_patterns(game_details, game_ids, game_type):
     """
     Analyze timing patterns for specific games
+    Returns timing distribution for use in executive summary
     """
     timing_data = game_details[game_details['game_id'].isin(game_ids)].copy()
     
     if len(timing_data) == 0:
         print("No timing data available for analysis.")
-        return
+        return None
     
     # Convert datetime columns
     date_format = "%B %d, %Y, %I:%M:%S.%f %p"
@@ -420,7 +436,7 @@ def analyze_timing_patterns(game_details, game_ids, game_type):
     
     if not timing_analysis:
         print("No valid timing data found.")
-        return
+        return None
     
     timing_df = pd.DataFrame(timing_analysis)
     
@@ -449,6 +465,19 @@ def analyze_timing_patterns(game_details, game_ids, game_type):
     print(f"├── Median min time: {timing_df['min_time'].median():.2f} seconds")
     print(f"├── Fastest failure: {timing_df['min_time'].min():.2f} seconds")
     print(f"└── Slowest failure: {timing_df['min_time'].max():.2f} seconds")
+    
+    # Return timing distribution for executive summary
+    return {
+        'game_type': game_type,
+        'distribution': time_distribution,
+        'total_games': total_games,
+        'stats': {
+            'avg_time': timing_df['min_time'].mean(),
+            'median_time': timing_df['min_time'].median(),
+            'min_time': timing_df['min_time'].min(),
+            'max_time': timing_df['min_time'].max()
+        }
+    }
 
 
 def analyze_top_failing_users_generic(matchmaking_failed, analysis_df):
@@ -590,7 +619,7 @@ def generate_comparative_analysis(matchmaking_failed, analysis_df):
         print(f"└── Games with 3+ players (playable): {len(playable_games):,} ({playable_rate:.1f}%)")
 
 
-def generate_executive_summary_generic(original_df, matchmaking_failed, analysis_df):
+def generate_executive_summary_generic(original_df, matchmaking_failed, analysis_df, timing_results=None):
     """
     Generate executive summary for generic matchmaking analysis
     """
@@ -659,6 +688,54 @@ def generate_executive_summary_generic(original_df, matchmaking_failed, analysis
     if suspicious_count > 0:
         print(f"\n🚨 SUSPICIOUS CASES: {suspicious_count:,} games")
         print(f"└── Definition: System bugs allowing wrong player counts")
+    
+    # Add timing analysis section
+    if timing_results:
+        print(f"\n⏱️ TIMING ANALYSIS FOR FISHY FAILURES")
+        
+        # Calculate overall timing statistics
+        total_fishy_games = 0
+        combined_distribution = {"< 2 seconds": 0, "2-5 seconds": 0, ">= 5 seconds": 0}
+        
+        for game_type, timing_data in timing_results.items():
+            distribution = timing_data['distribution']
+            total_games = timing_data['total_games']
+            total_fishy_games += total_games
+            
+            for category, count in distribution.items():
+                combined_distribution[category] += count
+        
+        # Calculate quick failures vs slow failures
+        quick_failures = combined_distribution["< 2 seconds"] + combined_distribution["2-5 seconds"]
+        slow_failures = combined_distribution[">= 5 seconds"]
+        
+        quick_percentage = (quick_failures / total_fishy_games * 100) if total_fishy_games > 0 else 0
+        slow_percentage = (slow_failures / total_fishy_games * 100) if total_fishy_games > 0 else 0
+        
+        print(f"├── 🟡 QUICK FAILURES ({quick_percentage:.1f}% - {quick_failures:,} games)")
+        print(f"│   ├── Definition: Games failing within 5 seconds of player join")
+        print(f"│   ├── Indicates: Race conditions, server overload, or logic errors")
+        
+        if combined_distribution["< 2 seconds"] > 0:
+            ultra_quick_pct = (combined_distribution["< 2 seconds"] / quick_failures * 100) if quick_failures > 0 else 0
+            print(f"│   ├── Ultra-quick (< 2s): {combined_distribution['< 2 seconds']:,} games ({ultra_quick_pct:.1f}%)")
+        
+        if combined_distribution["2-5 seconds"] > 0:
+            medium_quick_pct = (combined_distribution["2-5 seconds"] / quick_failures * 100) if quick_failures > 0 else 0
+            print(f"│   └── Medium-quick (2-5s): {combined_distribution['2-5 seconds']:,} games ({medium_quick_pct:.1f}%)")
+        
+        print(f"│")
+        print(f"└── 🔵 SLOW FAILURES ({slow_percentage:.1f}% - {slow_failures:,} games)")
+        print(f"    ├── Definition: Games failing after 5+ seconds (expected timeout)")
+        print(f"    ├── Indicates: Proper matchmaking timeout behavior")
+        print(f"    └── Game Type Breakdown:")
+        
+        for game_type, timing_data in timing_results.items():
+            distribution = timing_data['distribution']
+            slow_count = distribution.get(">= 5 seconds", 0)
+            if slow_count > 0:
+                slow_game_pct = (slow_count / slow_failures * 100) if slow_failures > 0 else 0
+                print(f"        ├── {game_type}: {slow_count:,} games ({slow_game_pct:.1f}%)")
 
 
 def main():

@@ -67,7 +67,6 @@ class AthenaToAWSAnalyzer:
         self._initialize_aws_connection()
         
     def _load_configuration(self) -> Dict:
-        """Load all configuration from environment variables"""
         config = {
             # AWS Configuration
             'aws_access_key': os.getenv('AWS_ACCESS_KEY_ID', ''),
@@ -686,28 +685,28 @@ class AthenaToAWSAnalyzer:
             # Collect all failure points for comprehensive analysis
             if phase1_result["status"] == "FAILED":
                 analysis_result["all_failure_points"].append({
-                    "phase": "REGISTRATION",
+                    "failure_reason": "FAILURE_REASON_1",
                     "type": "REGISTRATION_FAILURE", 
                     "reason": phase1_result["details"].get("failure_reason", "Unknown registration failure")
                 })
             
             if phase2_result["status"] == "FAILED":
                 analysis_result["all_failure_points"].append({
-                    "phase": "TABLE_ASSIGNMENT",
+                    "failure_reason": "FAILURE_REASON_2",
                     "type": "ALLOCATION_FAILURE",
                     "reason": phase2_result["details"].get("failure_reason", "Unknown table assignment failure")
                 })
                 
             if phase3_result["status"] == "FAILED":
                 analysis_result["all_failure_points"].append({
-                    "phase": "SOCKET_CONNECTION", 
+                    "failure_reason": "FAILURE_REASON_3", 
                     "type": "NETWORK_FAILURE",
                     "reason": phase3_result["details"].get("failure_reason", "Unknown socket connection failure")
                 })
                 
             if phase4_result["status"] == "FAILED":
                 analysis_result["all_failure_points"].append({
-                    "phase": phase4_result.get("failure_point", "MATCHMAKING_UNKNOWN"),
+                    "failure_reason": phase4_result.get("failure_point", "FAILURE_REASON_4"),
                     "type": phase4_result.get("failure_type", "UNKNOWN_MATCHMAKING_FAILURE"),
                     "reason": phase4_result["details"].get("failure_reason", "Unknown matchmaking failure")
                 })
@@ -734,7 +733,7 @@ class AthenaToAWSAnalyzer:
             if len(analysis_result["all_failure_points"]) > 1:
                 logger.debug(f"🔍 Multiple failure points detected for {registration_id}:")
                 for idx, failure in enumerate(analysis_result["all_failure_points"], 1):
-                    logger.debug(f"   {idx}. {failure['phase']}: {failure['reason']}")
+                    logger.debug(f"   {idx}. {failure['failure_reason']}: {failure['reason']}")
             
             return analysis_result
             
@@ -744,10 +743,10 @@ class AthenaToAWSAnalyzer:
             return analysis_result
     
     def _analyze_phase1_registration(self, log_content: str, registration_id: str) -> Dict:
-        """Phase 1: Tournament Registration Verification (from cursor rule)"""
+        """Failure Reason 1: Tournament Registration Verification (from cursor rule)"""
         result = {"status": "UNKNOWN", "details": {}}
         
-        # Check 1.1: Registration API Request
+        # Check 1.1: Registration API Request (Failure Reason 1)
         register_request_pattern = r'API New Request: /v1\.0/super/tournament/registerTournament'
         register_requests = re.findall(register_request_pattern, log_content)
         
@@ -755,7 +754,7 @@ class AthenaToAWSAnalyzer:
             result["details"]["api_request_found"] = True
             result["details"]["request_count"] = len(register_requests)
             
-            # Check 1.2: Registration API Success
+            # Check 1.2: Registration API Success (Failure Reason 1)
             success_pattern = rf'API Success: /v1\.0/super/tournament/registerTournament.*"registrationId":"{registration_id}"'
             success_matches = re.findall(success_pattern, log_content, re.DOTALL)
             
@@ -774,17 +773,17 @@ class AthenaToAWSAnalyzer:
         return result
     
     def _analyze_phase2_table_assignment(self, log_content: str, registration_id: str) -> Dict:
-        """Phase 2: Game Table Assignment Verification (from cursor rule)"""
+        """Failure Reason 2: Game Table Assignment Verification (from cursor rule)"""
         result = {"status": "UNKNOWN", "details": {}}
         
-        # Check 2.1: Get Tournament Details API Request
+        # Check 2.1: Get Tournament Details API Request (Failure Reason 2)
         details_request_pattern = rf'API New Request: /v1\.0/super/tournament/getTournamentDetails.*"registrationId":"{registration_id}"'
         details_requests = re.findall(details_request_pattern, log_content, re.DOTALL)
         
         if details_requests:
             result["details"]["api_request_found"] = True
             
-            # Check 2.2: Game Table Assigned Confirmation
+            # Check 2.2: Game Table Assigned Confirmation (Failure Reason 2)
             table_assigned_pattern = rf'API Success: /v1\.0/super/tournament/getTournamentDetails.*"registrationId":"{registration_id}".*"registrationStatus":"TABLE_ASSIGNED"'
             assigned_matches = re.findall(table_assigned_pattern, log_content, re.DOTALL)
             
@@ -803,17 +802,17 @@ class AthenaToAWSAnalyzer:
         return result
     
     def _analyze_phase3_socket_connection(self, log_content: str, registration_id: str) -> Dict:
-        """Phase 3: Gameplay Socket Connection Verification (from cursor rule)"""
+        """Failure Reason 3: Gameplay Socket Connection Verification (from cursor rule)"""
         result = {"status": "UNKNOWN", "details": {}}
         
-        # Check 3.1: Socket Connection Attempt
+        # Check 3.1: Socket Connection Attempt (Failure Reason 3)
         socket_url_pattern = rf'Socket url-.*"registrationId":"{registration_id}"'
         socket_attempts = re.findall(socket_url_pattern, log_content)
         
         if socket_attempts:
             result["details"]["connection_attempt_found"] = True
             
-            # Check 3.2: Socket Connection Result
+            # Check 3.2: Socket Connection Result (Failure Reason 3)
             connected_pattern = rf'Socket connected with id-.*"registrationId":"{registration_id}"'
             connected_matches = re.findall(connected_pattern, log_content)
             
@@ -839,17 +838,17 @@ class AthenaToAWSAnalyzer:
         return result
     
     def _analyze_phase4_matchmaking_lifecycle(self, log_content: str, registration_id: str) -> Dict:
-        """Phase 4: Matchmaking Lifecycle Analysis (from cursor rule)"""
+        """Failure Reason 4: Matchmaking Lifecycle Analysis (from cursor rule)"""
         result = {"status": "UNKNOWN", "details": {}, "failure_point": "UNKNOWN", "failure_type": "UNKNOWN"}
         
-        # Check 4.1: User Enters Matchmaking Queue
+        # Check 4.1: User Enters Matchmaking Queue (Failure Reason 4)
         finding_pattern = rf'eventHandler gameplay socket event-.*"registrationId":"{registration_id}".*"state":"FINDING"'
         finding_matches = re.findall(finding_pattern, log_content, re.DOTALL)
         
         if finding_matches:
             result["details"]["entered_queue"] = True
             
-            # Check 4.2: Final Matchmaking Outcome
+            # Check 4.2: Final Matchmaking Outcome (Failure Reason 4)
             # Outcome A: Server-Side Matchmaking Failure
             match_failed_pattern = rf'eventHandler gameplay socket event-.*"registrationId":"{registration_id}".*"en":"MATCH_MAKING_FAILED"'
             failed_matches = re.findall(match_failed_pattern, log_content, re.DOTALL)

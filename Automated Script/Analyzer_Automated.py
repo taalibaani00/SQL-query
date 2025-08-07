@@ -526,13 +526,6 @@ class AthenaToAWSAnalyzer:
                 'high_version_failures': {},  # >= 448
                 'low_version_failures': {},   # < 448
             },
-            'failure_categories': {
-                'phase1_registration_failures': [],
-                'phase2_table_assignment_failures': [],
-                'phase3_socket_connection_failures': [],
-                'phase4_matchmaking_failures': [],
-                'unknown_failures': []
-            },
             'detailed_results': []
         }
         
@@ -562,19 +555,6 @@ class AthenaToAWSAnalyzer:
                 if failure_analysis['failure_point'] not in analysis_results['version_analysis'][version_category]:
                     analysis_results['version_analysis'][version_category][failure_analysis['failure_point']] = 0
                 analysis_results['version_analysis'][version_category][failure_analysis['failure_point']] += 1
-                
-                # Categorize by failure phase
-                failure_phase = failure_analysis['failure_point'].lower()
-                if 'registration' in failure_phase:
-                    analysis_results['failure_categories']['phase1_registration_failures'].append(failure_analysis)
-                elif 'table' in failure_phase or 'assignment' in failure_phase:
-                    analysis_results['failure_categories']['phase2_table_assignment_failures'].append(failure_analysis)
-                elif 'socket' in failure_phase or 'connection' in failure_phase:
-                    analysis_results['failure_categories']['phase3_socket_connection_failures'].append(failure_analysis)
-                elif 'matchmaking' in failure_phase:
-                    analysis_results['failure_categories']['phase4_matchmaking_failures'].append(failure_analysis)
-                else:
-                    analysis_results['failure_categories']['unknown_failures'].append(failure_analysis)
                 
                 analysis_results['detailed_results'].append(failure_analysis)
                 
@@ -938,23 +918,7 @@ class AthenaToAWSAnalyzer:
             percentage = (count / total_low * 100) if total_low > 0 else 0
             logger.info(f"   ├── {failure_point}: {count} ({percentage:.1f}%)")
         
-        # Phase-based analysis
-        logger.info("\n🔍 PHASE-BASED FAILURE ANALYSIS:")
-        logger.info("-" * 50)
-        
-        for phase, failures in analysis_results['failure_categories'].items():
-            if failures:
-                logger.info(f"🎯 {phase.replace('_', ' ').title()}: {len(failures)} cases")
-                
-                # Show breakdown by version for each phase
-                version_breakdown = {}
-                for failure in failures:
-                    version = failure.get('version', 'unknown')
-                    version_key = f">={self.config['minimum_version']}" if version >= self.config['minimum_version'] else f"<{self.config['minimum_version']}"
-                    version_breakdown[version_key] = version_breakdown.get(version_key, 0) + 1
-                
-                for version_range, count in version_breakdown.items():
-                    logger.info(f"   ├── Version {version_range}: {count} cases")
+
         
         logger.info("="*80)
     
@@ -996,13 +960,7 @@ class AthenaToAWSAnalyzer:
             for failure_point, count in low_version.items():
                 f.write(f"  - {failure_point}: {count}\n")
             
-            # Phase analysis
-            f.write("\nPHASE-BASED ANALYSIS:\n")
-            f.write("-" * 40 + "\n")
-            
-            for phase, failures in analysis_results['failure_categories'].items():
-                if failures:
-                    f.write(f"{phase.replace('_', ' ').title()}: {len(failures)} cases\n")
+
         
         logger.info(f"📄 Reports generated: JSON and Text formats")
         
@@ -1038,41 +996,8 @@ class AthenaToAWSAnalyzer:
                 percentage = (count / total_failures) * 100
                 print(f"├── {failure_point}: {count} cases ({percentage:.1f}%)") 
         
-        # 2. Phase-wise Failure Analysis (only failed phases)
-        phase_failures = {
-            'phase1_registration': 0,
-            'phase2_table_assignment': 0,
-            'phase3_socket_connection': 0,
-            'phase4_matchmaking_lifecycle': 0
-        }
-        
-        for result in failed_results:
-            phases = result.get('phases', {})
-            for phase_name, phase_data in phases.items():
-                if phase_name in phase_failures:
-                    status = phase_data.get('status', 'UNKNOWN')
-                    if status == 'FAILED':
-                        phase_failures[phase_name] += 1
-        
-        # Only show phases that have failures
-        phases_with_failures = {k: v for k, v in phase_failures.items() if v > 0}
-        if phases_with_failures:
-            print(f"\nPhase-wise Failure Distribution:")
-            print("-" * 50)
-            phase_names = {
-                'phase1_registration': 'Phase 1 - Registration',
-                'phase2_table_assignment': 'Phase 2 - Table Assignment', 
-                'phase3_socket_connection': 'Phase 3 - Socket Connection',
-                'phase4_matchmaking_lifecycle': 'Phase 4 - Matchmaking Lifecycle'
-            }
-            
-            sorted_phase_failures = sorted(phases_with_failures.items(), key=lambda x: x[1], reverse=True)
-            for phase_key, failure_count in sorted_phase_failures:
-                phase_display = phase_names.get(phase_key, phase_key)
-                percentage = (failure_count / total_failures) * 100
-                print(f"├── {phase_display}: {failure_count} failures ({percentage:.1f}%)")
-        
-        # 3. Performance Summary
+
+        # 2. Performance Summary
         if hasattr(self, 'step_times') and total_logs > 0:
             logs_per_second = total_logs / self.step_times['logs_fetch'] if self.step_times.get('logs_fetch', 0) > 0 else 0
             analysis_per_second = total_logs / self.step_times['analysis'] if self.step_times.get('analysis', 0) > 0 else 0
@@ -1083,11 +1008,10 @@ class AthenaToAWSAnalyzer:
             print(f"├── Analysis Speed: {analysis_per_second:.1f} logs/second")
             print(f"├── Total Logs Processed: {total_logs}")
         
-        # 4. Final Summary
+        # 3. Final Summary
         self._print_final_summary(analysis_results, total_logs)
     
     def _print_final_summary(self, analysis_results, total_logs):
-        """Print final summary of failure distribution and wait time analysis"""
         print(f"\n📋 FINAL ANALYSIS SUMMARY:")
         print("="*60)
         
